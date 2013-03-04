@@ -14,3 +14,4 @@ Usage
 License
 -------
 The LicenseReport is available under [Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0.html). The full license text can be found in the file LICENSE.
+=======
