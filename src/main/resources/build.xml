@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<project name="license-report" basedir="." default="main">
+	<taskdef name="license-report" classpath="${basedir}\..\..\..\target\classes" classname="de.guerda.licensereport.LicenseReportTask" />
+
+	<target name="main">
+		<license-report>
+			<fileset dir="../../test/resources/">
+				<include name="**/*.jar" />
+			</fileset>
+		</license-report>
+	</target>
+</project>
