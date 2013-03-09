@@ -12,19 +12,36 @@ import java.util.jar.JarFile;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import javax.xml.parsers.DocumentBuilder;
+import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
+import javax.xml.transform.OutputKeys;
+import javax.xml.transform.Transformer;
+import javax.xml.transform.TransformerException;
+import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.dom.DOMSource;
+import javax.xml.transform.stream.StreamResult;
+
 import org.apache.tools.ant.BuildException;
 import org.apache.tools.ant.DirectoryScanner;
 import org.apache.tools.ant.Task;
 import org.apache.tools.ant.types.FileSet;
+import org.w3c.dom.CDATASection;
+import org.w3c.dom.Document;
+import org.w3c.dom.Element;
+import org.w3c.dom.Node;
 
 /**
  * @author Philip Gillißen
- *
+ * 
  */
 public final class LicenseReportTask extends Task {
 
   Vector<FileSet> fileSets;
   private static final Pattern LICENSE_PATTERN = Pattern.compile("^Bundle-License: (.*)$");
+  private Document document;
+  private File resultFile;
+  private Element librariesElement;
 
   public LicenseReportTask() {
     fileSets = new Vector<>();
@@ -32,7 +49,9 @@ public final class LicenseReportTask extends Task {
 
   @Override
   public void execute() throws BuildException {
+    initialize();
     validate();
+
     for (Iterator<FileSet> tmpIterator = fileSets.iterator(); tmpIterator.hasNext();) { // 2
       FileSet tempFileSet = tmpIterator.next();
       DirectoryScanner tempScanner = tempFileSet.getDirectoryScanner(getProject()); // 3
@@ -40,6 +59,41 @@ public final class LicenseReportTask extends Task {
       for (String tmpFileName : tempFiles) {
         inspectJar(tempFileSet.getDir(), tmpFileName);
       }
+    }
+    createResultXml();
+  }
+
+  private void createResultXml() {
+    try {
+      TransformerFactory tmpTransformerFactory = TransformerFactory.newInstance();
+      Transformer tmpTransformer;
+      tmpTransformer = tmpTransformerFactory.newTransformer();
+      tmpTransformer.setOutputProperty(OutputKeys.INDENT, "yes");
+      tmpTransformer.setOutputProperty("{http://xml.apache.org/xslt}indent-amount", "2");
+
+      DOMSource tmpSource = new DOMSource(document);
+      StreamResult tmpResult = new StreamResult(resultFile);
+
+      tmpTransformer.transform(tmpSource, tmpResult);
+    } catch (TransformerException e) {
+      throw new BuildException("Could not create XML file '" + resultFile.getAbsolutePath() + "'!", e);
+    }
+  }
+
+  private void initialize() {
+    try {
+      DocumentBuilderFactory tmpFactory = DocumentBuilderFactory.newInstance();
+      DocumentBuilder tmpBuilder = tmpFactory.newDocumentBuilder();
+      document = tmpBuilder.newDocument();
+      Element rootElement = document.createElement("license-report");
+      document.appendChild(rootElement);
+      librariesElement = document.createElement("libraries");
+      rootElement.appendChild(librariesElement);
+
+      resultFile = File.createTempFile("license-report-results_", ".xml");
+      System.out.println(resultFile.getAbsolutePath());
+    } catch (IOException | ParserConfigurationException e) {
+      throw new BuildException("Could not create license report results file", e);
     }
   }
 
@@ -59,7 +113,7 @@ public final class LicenseReportTask extends Task {
     for (String tmpLine : tmpLines) {
       Matcher tmpMatcher = LICENSE_PATTERN.matcher(tmpLine);
       if (tmpMatcher.matches()) {
-        tmpLicense.append(tmpManifestFilename + ": " +tmpMatcher.group(1));
+        tmpLicense.append(tmpManifestFilename + ": " + tmpMatcher.group(1));
         break;
       }
     }
@@ -96,10 +150,26 @@ public final class LicenseReportTask extends Task {
 
     if (tmpLicense.length() == 0) {
       System.out.printf("%50s\t%s\r\n", tmpFile.getName(), "No License Information Found");
+      addResultToReport(tmpFile.getName(), "No License Information Found");
     } else {
       System.out.printf("%50s\t%s\r\n", tmpFile.getName(), tmpLicense);
+      addResultToReport(tmpFile.getName(), tmpLicense.toString());
     }
 
+  }
+
+  private void addResultToReport(String aName, String aString) {
+    Node tmpChild = document.createElement("library");
+    Element tmpNameElement = document.createElement("name");
+    tmpNameElement.setTextContent(aName);
+    tmpChild.appendChild(tmpNameElement);
+
+    Element tmpLicenseElement = document.createElement("license");
+    CDATASection tmpCDATASection = document.createCDATASection(aString);
+    tmpLicenseElement.appendChild(tmpCDATASection);
+    tmpChild.appendChild(tmpLicenseElement);
+
+    librariesElement.appendChild(tmpChild);
   }
 
   private boolean isBlank(String aString) {
@@ -134,7 +204,7 @@ public final class LicenseReportTask extends Task {
   private Vector<String> findAndReadFileFromJar(File tmpFile, String tmpManifestFilename) {
     Vector<String> tmpResult = new Vector<>();
     String tmpJarFilePrefix = "jar:file:" + tmpFile.getAbsolutePath() + "!/";
-    JarFile tmpJarFile;
+    JarFile tmpJarFile = null;
     try {
       tmpJarFile = new JarFile(tmpFile);
       if (tmpJarFile.getJarEntry(tmpManifestFilename) != null) {
@@ -153,6 +223,13 @@ public final class LicenseReportTask extends Task {
       }
     } catch (IOException e1) {
       throw new BuildException("Could not read JAR file '" + tmpFile.getAbsolutePath() + "'!", e1);
+    } finally {
+      try {
+        if (tmpJarFile != null) {
+          tmpJarFile.close();
+        }
+      } catch (IOException e) {
+      }
     }
     return tmpResult;
   }
