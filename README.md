@@ -21,6 +21,8 @@ Usage
 5. Build your project as you normally do.
 6. Enjoy your created report!
 
+You can also see a demo of this task in the [license-report-demo project on Github](https://github.com/guerda/license-report-demo/)
+
 License
 -------
 The LicenseReport is available under [Apache License 2.0](http://www.apache.org/licenses/LICENSE-2.0.html).
