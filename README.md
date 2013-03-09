@@ -11,16 +11,13 @@ Usage
 -----
 1. Generate the JAR file via `mvn clean package`
 2. Include the generated JAR file (you'll find it at `target/license-report-x.x.jar`) into your Ant project
-3. Put this snippet in the head, so that the task definition is known. Be sure to adapt the paths.
-
-<taskdef name="license-report" classpath="${basedir}\lib\license-report-1.0.jar" classname="de.guerda.licensereport.LicenseReportTask" />
+3. Put the following snippet in the head, so that the task definition is known. Be sure to adapt the paths: `<taskdef name="license-report" classpath="${basedir}\lib\license-report-1.0.jar" classname="de.guerda.licensereport.LicenseReportTask" />`
 4. Call the `license-report` task with a snippet like this. Be sure to include all your JARs with the filesets.
-
-    <license-report>
+    `<license-report>
       <fileset dir="${basedir}\lib">
         <include name="**/*.jar" />
       </fileset>
-    </license-report>
+    </license-report>`    
 5. Build your project as you normally do.
 6. Enjoy your created report!
 
