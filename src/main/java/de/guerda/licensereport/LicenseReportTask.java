@@ -2,10 +2,12 @@ package de.guerda.licensereport;
 
 import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URL;
+import java.util.Date;
 import java.util.Iterator;
 import java.util.Vector;
 import java.util.jar.JarFile;
@@ -19,13 +21,18 @@ import javax.xml.transform.OutputKeys;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
 import javax.xml.transform.TransformerFactory;
+import javax.xml.transform.TransformerFactoryConfigurationError;
 import javax.xml.transform.dom.DOMSource;
 import javax.xml.transform.stream.StreamResult;
+import javax.xml.transform.stream.StreamSource;
 
 import org.apache.tools.ant.BuildException;
 import org.apache.tools.ant.DirectoryScanner;
 import org.apache.tools.ant.Task;
 import org.apache.tools.ant.types.FileSet;
+import org.jdom.output.Format;
+import org.jdom.output.XMLOutputter;
+import org.jdom.transform.JDOMResult;
 import org.w3c.dom.CDATASection;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
@@ -37,11 +44,28 @@ import org.w3c.dom.Node;
  */
 public final class LicenseReportTask extends Task {
 
-  Vector<FileSet> fileSets;
+  /**
+   * Contains all {@link FileSet}s of JARs which should be inspected for
+   * licenses.
+   */
+  private final Vector<FileSet> fileSets;
+
+  /**
+   * Contains the target directory for the results, in XML and HTML.
+   */
+  private String toDir;
+
+  /**
+   * Contains the pattern for the OSGI compatible license declaration in the
+   * MANIFEST.MF file.
+   */
   private static final Pattern LICENSE_PATTERN = Pattern.compile("^Bundle-License: (.*)$");
+
   private Document document;
   private File resultFile;
   private Element librariesElement;
+
+  private File htmlOutputFile;
 
   public LicenseReportTask() {
     fileSets = new Vector<>();
@@ -49,8 +73,8 @@ public final class LicenseReportTask extends Task {
 
   @Override
   public void execute() throws BuildException {
-    initialize();
     validate();
+    initialize();
 
     for (Iterator<FileSet> tmpIterator = fileSets.iterator(); tmpIterator.hasNext();) { // 2
       FileSet tempFileSet = tmpIterator.next();
@@ -60,10 +84,31 @@ public final class LicenseReportTask extends Task {
         inspectJar(tempFileSet.getDir(), tmpFileName);
       }
     }
-    createResultXml();
+    createXmlResultFile();
+    createHtmlResultFile();
   }
 
-  private void createResultXml() {
+  private void createHtmlResultFile() {
+    try {
+      DOMSource tmpSource = new DOMSource(document);
+      JDOMResult tmpHtmlResult = new JDOMResult();
+      InputStream tmpXslResource = LicenseReportTask.class.getResourceAsStream("../../../license-report.xsl");
+      StreamSource tmpStreamSource = new StreamSource(tmpXslResource);
+      // Create Transformer with XSL
+      Transformer tmpTransformer = TransformerFactory.newInstance().newTransformer(tmpStreamSource);
+      tmpTransformer.transform(tmpSource, tmpHtmlResult);
+
+      // Create formatter with pretty output
+      XMLOutputter tmpOutputter = new XMLOutputter();
+      tmpOutputter.setFormat(Format.getPrettyFormat());
+      // Write HTML output
+      tmpOutputter.output(tmpHtmlResult.getDocument(), new FileWriter(htmlOutputFile));
+    } catch (TransformerFactoryConfigurationError | TransformerException | IOException e) {
+      throw new BuildException("Could not create HTML result file!", e);
+    }
+  }
+
+  private void createXmlResultFile() {
     try {
       TransformerFactory tmpTransformerFactory = TransformerFactory.newInstance();
       Transformer tmpTransformer;
@@ -86,13 +131,16 @@ public final class LicenseReportTask extends Task {
       DocumentBuilder tmpBuilder = tmpFactory.newDocumentBuilder();
       document = tmpBuilder.newDocument();
       Element rootElement = document.createElement("license-report");
+      rootElement.setAttribute("project-name", getProject().getName());
+      rootElement.setAttribute("date", new Date().toString());
       document.appendChild(rootElement);
       librariesElement = document.createElement("libraries");
       rootElement.appendChild(librariesElement);
 
-      resultFile = File.createTempFile("license-report-results_", ".xml");
+      resultFile = new File(toDir + "/license-report-results.xml");
+      htmlOutputFile = new File(toDir + "/license-report-results.html");
       System.out.println(resultFile.getAbsolutePath());
-    } catch (IOException | ParserConfigurationException e) {
+    } catch (ParserConfigurationException e) {
       throw new BuildException("Could not create license report results file", e);
     }
   }
@@ -172,6 +220,15 @@ public final class LicenseReportTask extends Task {
     librariesElement.appendChild(tmpChild);
   }
 
+  /**
+   * Checks, if a String is null or empty.
+   * 
+   * Copied from Apache Commons Lang StringUtils.isBlank()
+   * 
+   * @param aString
+   *          The {@link String} to check.
+   * @return true, if the given String was empty or null
+   */
   private boolean isBlank(String aString) {
     int tmpLength;
     if (aString == null || (tmpLength = aString.length()) == 0) {
@@ -235,6 +292,10 @@ public final class LicenseReportTask extends Task {
   }
 
   private void validate() throws BuildException {
+    if (isBlank(toDir)) {
+      throw new BuildException("No Output Directory (attribute 'toDir') given");
+    }
+
     if (fileSets.size() == 0) {
       throw new BuildException("No Files given");
     }
@@ -245,6 +306,14 @@ public final class LicenseReportTask extends Task {
 
   public void addFileset(FileSet fileset) {
     fileSets.add(fileset);
+  }
+
+  public String getToDir() {
+    return toDir;
+  }
+
+  public void setToDir(String aToDir) {
+    toDir = aToDir;
   }
 
 }

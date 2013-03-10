@@ -15,15 +15,24 @@ public class LicenseReportTaskTest {
   @Before
   public void setUp() {
     task = new LicenseReportTask();
-    FileSet tempFileset = new FileSet();
-    tempFileset.setIncludes("**/*.jar");
+
     File tempDir = new File("target/");
     System.out.println(tempDir.getAbsolutePath());
+
+    // Add filesets
+    FileSet tempFileset = new FileSet();
+    tempFileset.setIncludes("**/*.jar");
     tempFileset.setDir(tempDir);
+    task.addFileset(tempFileset);
+
+    // Add project
     Project tempProject = new Project();
+    tempProject.setName("license-report JUnit test");
     tempProject.setBaseDir(tempDir);
     task.setProject(tempProject);
-    task.addFileset(tempFileset);
+
+    // Add output directory
+    task.setToDir(tempDir.getAbsolutePath());
   }
 
   @Test
