@@ -3,6 +3,7 @@ package de.guerda.licensereport;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileWriter;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -195,6 +196,13 @@ public final class LicenseReportTask extends Task {
     if (!isBlank(tmpLicenseHead)) {
       tmpLicense.append(tmpLicenseHead);
     }
+    
+    // Search for txt file with the same name
+    String tmpPath = tmpFile.getAbsolutePath();
+    tmpLicenseHead = findAndReadFile(tmpPath.substring(0, tmpPath.length()-4) + ".txt"); // .jar -> .txt
+    if (!isBlank(tmpLicenseHead)) {
+      tmpLicense.append(tmpLicenseHead);
+    }
 
     if (tmpLicense.length() == 0) {
       System.out.printf("%50s\t%s\r\n", tmpFile.getName(), "No License Information Found");
@@ -204,6 +212,26 @@ public final class LicenseReportTask extends Task {
       addResultToReport(tmpFile.getName(), tmpLicense.toString());
     }
 
+  }
+  
+  private String findAndReadFile(String aFileName) {   
+    File tmpFile = new File(aFileName);
+    if(tmpFile.exists()) {
+      StringBuffer tmpResult = new StringBuffer(aFileName + ": ");
+      try(BufferedReader tmpBufferedReader = new BufferedReader(new FileReader(tmpFile))) {
+        for(int i = 0; i < 5; i++) {
+          String tmpData = tmpBufferedReader.readLine();
+            if(tmpData == null) {
+              break;
+            }
+            tmpResult.append(tmpData);
+        }
+      } catch(IOException e) {
+        throw new BuildException("Could not read file named '"+aFileName+"'!", e);
+      }
+      return tmpResult.toString();
+    }
+    return null;
   }
 
   private void addResultToReport(String aName, String aString) {
