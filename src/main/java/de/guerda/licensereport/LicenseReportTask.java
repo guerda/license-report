@@ -2,8 +2,8 @@ package de.guerda.licensereport;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
@@ -29,6 +29,7 @@ import javax.xml.transform.stream.StreamSource;
 
 import org.apache.tools.ant.BuildException;
 import org.apache.tools.ant.DirectoryScanner;
+import org.apache.tools.ant.Project;
 import org.apache.tools.ant.Task;
 import org.apache.tools.ant.types.FileSet;
 import org.jdom.output.Format;
@@ -44,6 +45,8 @@ import org.w3c.dom.Node;
  * 
  */
 public final class LicenseReportTask extends Task {
+
+  private static final int COUNT_OF_LINES = 10;
 
   /**
    * Contains all {@link FileSet}s of JARs which should be inspected for
@@ -140,13 +143,16 @@ public final class LicenseReportTask extends Task {
 
       resultFile = new File(toDir + "/license-report-results.xml");
       htmlOutputFile = new File(toDir + "/license-report-results.html");
-      System.out.println(resultFile.getAbsolutePath());
+      log(resultFile.getAbsolutePath(), Project.MSG_INFO);
     } catch (ParserConfigurationException e) {
       throw new BuildException("Could not create license report results file", e);
     }
   }
 
   private void inspectJar(File aDir, String aString) {
+    if (!(aString.endsWith(".jar") || aString.endsWith(".JAR"))) {
+      log("'" + aString + "' is not a JAR file!", Project.MSG_WARN);
+    }
     File tmpFile = new File(aDir, aString);
     if (!tmpFile.exists() || !tmpFile.canRead()) {
       throw new BuildException("File not found or not readable: " + aDir.getAbsolutePath() + aString);
@@ -168,38 +174,25 @@ public final class LicenseReportTask extends Task {
     }
 
     // Search for META-INF/LICENSE.txt
-    tmpLicenseHead = findFileAndExtractHeaderFromJar(tmpFile, "META-INF/LICENSE.txt");
-    if (!isBlank(tmpLicenseHead)) {
-      tmpLicense.append(tmpLicenseHead);
-    }
+    findFileInFileAndWriteTo(tmpFile, tmpLicense, "META-INF/LICENSE.txt");
 
     // Search for META-INF/LICENSE
-    tmpLicenseHead = findFileAndExtractHeaderFromJar(tmpFile, "META-INF/LICENSE");
-    if (!isBlank(tmpLicenseHead)) {
-      tmpLicense.append(tmpLicenseHead);
-    }
+    findFileInFileAndWriteTo(tmpFile, tmpLicense, "META-INF/LICENSE");
 
     // Search for LICENSE
-    tmpLicenseHead = findFileAndExtractHeaderFromJar(tmpFile, "LICENSE");
-    if (!isBlank(tmpLicenseHead)) {
-      tmpLicense.append(tmpLicenseHead);
-    }
+    findFileInFileAndWriteTo(tmpFile, tmpLicense, "LICENSE");
 
     // Search for LICENSE.txt
-    tmpLicenseHead = findFileAndExtractHeaderFromJar(tmpFile, "LICENSE.txt");
-    if (!isBlank(tmpLicenseHead)) {
-      tmpLicense.append(tmpLicenseHead);
-    }
+    findFileInFileAndWriteTo(tmpFile, tmpLicense, "LICENSE.txt");
 
     // Search for LICENSE
-    tmpLicenseHead = findFileAndExtractHeaderFromJar(tmpFile, "license/LICENSE.txt");
-    if (!isBlank(tmpLicenseHead)) {
-      tmpLicense.append(tmpLicenseHead);
-    }
-    
+    findFileInFileAndWriteTo(tmpFile, tmpLicense, "license/LICENSE.txt");
+
     // Search for txt file with the same name
     String tmpPath = tmpFile.getAbsolutePath();
-    tmpLicenseHead = findAndReadFile(tmpPath.substring(0, tmpPath.length()-4) + ".txt"); // .jar -> .txt
+    tmpLicenseHead = findAndReadFile(tmpPath.substring(0, tmpPath.length() - 4) + ".txt"); // .jar
+                                                                                           // ->
+                                                                                           // .txt
     if (!isBlank(tmpLicenseHead)) {
       tmpLicense.append(tmpLicenseHead);
     }
@@ -213,21 +206,34 @@ public final class LicenseReportTask extends Task {
     }
 
   }
-  
-  private String findAndReadFile(String aFileName) {   
+
+  /**
+   * @param tmpFile
+   * @param tmpLicense
+   * @param tmpLicenseFilename
+   */
+  public void findFileInFileAndWriteTo(File tmpFile, StringBuffer tmpLicense, String tmpLicenseFilename) {
+    String tmpLicenseHead = findFileAndExtractHeaderFromJar(tmpFile, tmpLicenseFilename);
+    if (!isBlank(tmpLicenseHead)) {
+      tmpLicense.append(tmpLicenseHead);
+    }
+  }
+
+  private String findAndReadFile(String aFileName) {
     File tmpFile = new File(aFileName);
-    if(tmpFile.exists()) {
-      StringBuffer tmpResult = new StringBuffer(aFileName + ": ");
-      try(BufferedReader tmpBufferedReader = new BufferedReader(new FileReader(tmpFile))) {
-        for(int i = 0; i < 5; i++) {
+    if (tmpFile.exists()) {
+      StringBuffer tmpResult = new StringBuffer(tmpFile.getName() + ": ");
+      try (BufferedReader tmpBufferedReader = new BufferedReader(new FileReader(tmpFile))) {
+        for (int i = 0; i < COUNT_OF_LINES; i++) {
           String tmpData = tmpBufferedReader.readLine();
-            if(tmpData == null) {
-              break;
-            }
-            tmpResult.append(tmpData);
+          if (tmpData == null) {
+            break;
+          }
+          tmpData = tmpData.replaceAll("\\*", "");
+          tmpResult.append(tmpData);
         }
-      } catch(IOException e) {
-        throw new BuildException("Could not read file named '"+aFileName+"'!", e);
+      } catch (IOException e) {
+        throw new BuildException("Could not read file named '" + aFileName + "'!", e);
       }
       return tmpResult.toString();
     }
@@ -275,7 +281,7 @@ public final class LicenseReportTask extends Task {
     Vector<String> tmpLines;
     tmpLines = findAndReadFileFromJar(aFile, aLicenseFilename);
     if (tmpLines.size() > 0) {
-      for (int i = 0; i < tmpLines.size() && i <= 5; i++) {
+      for (int i = 0; i < tmpLines.size() && i <= COUNT_OF_LINES; i++) {
         tmpLicenseHead.append(tmpLines.get(i).trim() + " ");
       }
     }
@@ -327,7 +333,7 @@ public final class LicenseReportTask extends Task {
     if (fileSets.size() == 0) {
       throw new BuildException("No Files given");
     }
-    System.out.println(fileSets.size() + " given filesets.");
+    log(fileSets.size() + " given filesets.", Project.MSG_INFO);
   }
 
   // getter setter

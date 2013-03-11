@@ -42,7 +42,7 @@
 							<addDefaultImplementationEntries>true</addDefaultImplementationEntries>
 						</manifest>
 						<manifestEntries>
-							<Bundle-License>${project.license.url}</Bundle-License>
+							<Bundle-License>http://www.apache.org/licenses/LICENSE-2.0.txt</Bundle-License>
 						</manifestEntries>
 					</archive>
 				</configuration>
