@@ -72,7 +72,7 @@ public final class LicenseReportTask extends Task {
   private File htmlOutputFile;
 
   public LicenseReportTask() {
-    fileSets = new Vector<>();
+    fileSets = new Vector<FileSet>();
   }
 
   @Override
@@ -107,7 +107,11 @@ public final class LicenseReportTask extends Task {
       tmpOutputter.setFormat(Format.getPrettyFormat());
       // Write HTML output
       tmpOutputter.output(tmpHtmlResult.getDocument(), new FileWriter(htmlOutputFile));
-    } catch (TransformerFactoryConfigurationError | TransformerException | IOException e) {
+    } catch (TransformerFactoryConfigurationError e) {
+      throw new BuildException("Could not create HTML result file!", e);
+    } catch (TransformerException e) {
+      throw new BuildException("Could not create HTML result file!", e);
+    } catch (IOException e) {
       throw new BuildException("Could not create HTML result file!", e);
     }
   }
@@ -223,17 +227,38 @@ public final class LicenseReportTask extends Task {
     File tmpFile = new File(aFileName);
     if (tmpFile.exists()) {
       StringBuffer tmpResult = new StringBuffer(tmpFile.getName() + ": ");
-      try (BufferedReader tmpBufferedReader = new BufferedReader(new FileReader(tmpFile))) {
+
+      FileReader tmpFileReader = null;
+      BufferedReader tmpBufferedReader = null;
+      try {
+        tmpFileReader = new FileReader(tmpFile);
+        tmpBufferedReader = new BufferedReader(tmpFileReader);
         for (int i = 0; i < COUNT_OF_LINES; i++) {
           String tmpData = tmpBufferedReader.readLine();
           if (tmpData == null) {
             break;
           }
+          // Remove superficial characters
           tmpData = tmpData.replaceAll("\\*", "");
+          tmpData = tmpData.replaceAll("=", "");
           tmpResult.append(tmpData);
         }
       } catch (IOException e) {
         throw new BuildException("Could not read file named '" + aFileName + "'!", e);
+      } finally {
+        if (tmpFileReader != null) {
+          try {
+            tmpFileReader.close();
+          } catch (IOException e) {
+          }
+        }
+        if (tmpBufferedReader != null) {
+          try {
+            tmpBufferedReader.close();
+          } catch (IOException e) {
+          }
+
+        }
       }
       return tmpResult.toString();
     }
@@ -293,7 +318,7 @@ public final class LicenseReportTask extends Task {
   }
 
   private Vector<String> findAndReadFileFromJar(File tmpFile, String tmpManifestFilename) {
-    Vector<String> tmpResult = new Vector<>();
+    Vector<String> tmpResult = new Vector<String>();
     String tmpJarFilePrefix = "jar:file:" + tmpFile.getAbsolutePath() + "!/";
     JarFile tmpJarFile = null;
     try {
