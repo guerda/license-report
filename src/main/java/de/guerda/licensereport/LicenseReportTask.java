@@ -233,7 +233,9 @@ public final class LicenseReportTask extends Task {
     String tempTextFileName = tmpPath.substring(0, tmpPath.length() - 4) + ".txt";
     tmpLicenseHead = findAndReadFile(tempTextFileName);
     if (!isBlank(tmpLicenseHead)) {
-      tempLicenseInformations.add(new LicenseInformation(aJarFile, tempTextFileName, tmpLicenseHead));
+      // Create only the relative path.
+      String tempShortTextFileName = tempTextFileName.substring(aJarFile.getAbsolutePath().length() - aJarFile.getName().length());
+      tempLicenseInformations.add(new LicenseInformation(aJarFile, tempShortTextFileName, tmpLicenseHead));
     }
 
     if (tempLicenseInformations.size() == 0) {
