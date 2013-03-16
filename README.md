@@ -7,6 +7,12 @@ As there was no solution for this problem, the project idea started on the
 following question on [StackOverflow](http://stackoverflow.com):
 [How can I compile a report showing all used licenses with Ant?](http://stackoverflow.com/questions/15024819/how-can-i-compile-a-report-showing-all-used-licenses-with-ant)
 
+Features
+--------
+* Scanning all defined JAR files for license information
+* Compiling the found results into an XML file
+* Generating a nice HTML report for humans
+
 Usage
 -----
 1. Generate the JAR file via `mvn clean package`

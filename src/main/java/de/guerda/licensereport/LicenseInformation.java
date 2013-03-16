@@ -1,26 +1,28 @@
 package de.guerda.licensereport;
 
+import java.io.File;
+
 public class LicenseInformation {
 
-  private String fileName;
+  private File file;
 
   private String source;
 
   private String licenseInformation;
 
-  public LicenseInformation(String aFileName, String aSource, String aLicenseInformation) {
+  public LicenseInformation(File aFile, String aSource, String aLicenseInformation) {
     super();
-    fileName = aFileName;
+    file = aFile;
     source = aSource;
     licenseInformation = aLicenseInformation;
   }
-  
-  public String getFileName() {
-    return fileName;
+
+  public File getFile() {
+    return file;
   }
 
-  public void setFileName(String aFileName) {
-    fileName = aFileName;
+  public void setFile(File aFile) {
+    file = aFile;
   }
 
   public String getSource() {
@@ -38,5 +40,10 @@ public class LicenseInformation {
   public void setLicenseInformation(String aLicenseInformation) {
     licenseInformation = aLicenseInformation;
   }
-  
+
+  @Override
+  public String toString() {
+    return source + ": " + licenseInformation;
+  }
+
 }
