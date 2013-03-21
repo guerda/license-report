@@ -10,6 +10,7 @@ public class LicenseInformation {
 
   private String licenseInformation;
 
+  @Deprecated
   public LicenseInformation(File aFile, String aSource, String aLicenseInformation) {
     super();
     file = aFile;
@@ -17,10 +18,18 @@ public class LicenseInformation {
     licenseInformation = aLicenseInformation;
   }
 
+  public LicenseInformation(String aSource, String aLicenseInformation) {
+    super();
+    source = aSource;
+    licenseInformation = aLicenseInformation;
+  }
+
+  @Deprecated
   public File getFile() {
     return file;
   }
 
+  @Deprecated
   public void setFile(File aFile) {
     file = aFile;
   }

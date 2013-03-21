@@ -9,8 +9,12 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.Iterator;
+import java.util.Set;
 import java.util.Vector;
 import java.util.jar.JarFile;
 import java.util.regex.Matcher;
@@ -77,8 +81,19 @@ public final class LicenseReportTask extends Task {
 
   private File htmlOutputFile;
 
+  private HashMap<File, ArrayList<LicenseInformation>> licenseInformations;
+
+  private Comparator<File> fileComparator;
+
   public LicenseReportTask() {
     fileSets = new Vector<FileSet>();
+
+    fileComparator = new Comparator<File>() {
+      @Override
+      public int compare(File aO1, File aO2) {
+        return aO1.getName().compareTo(aO2.getName());
+      }
+    };
   }
 
   @Override
@@ -86,13 +101,27 @@ public final class LicenseReportTask extends Task {
     validate();
     initializeFiles();
 
+    // Prepare file list
+    ArrayList<File> tempFileList = new ArrayList<File>();
     for (Iterator<FileSet> tmpIterator = fileSets.iterator(); tmpIterator.hasNext();) { // 2
       FileSet tempFileSet = tmpIterator.next();
       DirectoryScanner tempScanner = tempFileSet.getDirectoryScanner(getProject()); // 3
       String[] tempFiles = tempScanner.getIncludedFiles();
       for (String tmpFileName : tempFiles) {
-        inspectJar(tempFileSet.getDir(), tmpFileName);
+        if (!(tmpFileName.endsWith(".jar") || tmpFileName.endsWith(".JAR"))) {
+          log("'" + tmpFileName + "' is not a JAR file!", Project.MSG_WARN);
+        } else {
+          tempFileList.add(new File(tempFileSet.getDir(), tmpFileName));
+        }
       }
+    }
+
+    // Sort files
+    Collections.sort(tempFileList, fileComparator);
+
+    // Iterate over all collected files.
+    for (File tempFile : tempFileList) {
+      inspectJar(tempFile);
     }
     createXmlResultFile();
     createHtmlResultFile();
@@ -126,6 +155,46 @@ public final class LicenseReportTask extends Task {
   }
 
   private void createXmlResultFile() {
+    Set<File> tempKeySet = licenseInformations.keySet();
+    ArrayList<File> tempFileList = new ArrayList<File>(tempKeySet);
+    Collections.sort(tempFileList, fileComparator);
+
+    for (File tempFile : tempFileList) {
+      String tmpFileName = tempFile.getName();
+      Node tmpLibraryElement = document.createElement("library");
+
+      Element tmpNameElement = document.createElement("name");
+      tmpNameElement.setTextContent(tmpFileName);
+      tmpLibraryElement.appendChild(tmpNameElement);
+
+      Element tmpInformationListElement = document.createElement("information-list");
+      tmpLibraryElement.appendChild(tmpInformationListElement);
+
+      for (LicenseInformation tempLicenseInformation : licenseInformations.get(tempFile)) {
+        Element tmpInformationElement = document.createElement("information");
+        tmpInformationListElement.appendChild(tmpInformationElement);
+
+        String tmpSource = tempLicenseInformation.getSource();
+        String tmpLicenseInformation = tempLicenseInformation.getLicenseInformation();
+
+        Element tmpSourceElement = document.createElement("source");
+        if (tmpSource != null) {
+          tmpSourceElement.setTextContent(tmpSource);
+        }
+        tmpInformationElement.appendChild(tmpSourceElement);
+
+        Element tmpLicenseElement = document.createElement("license");
+        if (tmpLicenseInformation != null) {
+
+          CDATASection tmpCDATASection = document.createCDATASection(tmpLicenseInformation);
+          tmpLicenseElement.appendChild(tmpCDATASection);
+        }
+        tmpInformationElement.appendChild(tmpLicenseElement);
+
+      }
+      librariesElement.appendChild(tmpLibraryElement);
+    }
+
     try {
       TransformerFactory tmpTransformerFactory = TransformerFactory.newInstance();
       Transformer tmpTransformer;
@@ -144,6 +213,8 @@ public final class LicenseReportTask extends Task {
 
   protected void initializeFiles() {
     try {
+      licenseInformations = new HashMap<File, ArrayList<LicenseInformation>>();
+
       DocumentBuilderFactory tmpFactory = DocumentBuilderFactory.newInstance();
       DocumentBuilder tmpBuilder = tmpFactory.newDocumentBuilder();
       document = tmpBuilder.newDocument();
@@ -160,14 +231,6 @@ public final class LicenseReportTask extends Task {
     } catch (ParserConfigurationException e) {
       throw new BuildException("Could not create license report results file", e);
     }
-  }
-
-  protected void inspectJar(File aDir, String aString) {
-    if (!(aString.endsWith(".jar") || aString.endsWith(".JAR"))) {
-      log("'" + aString + "' is not a JAR file!", Project.MSG_WARN);
-    }
-    File tmpJarFile = new File(aDir, aString);
-    inspectJar(tmpJarFile);
   }
 
   protected void inspectJar(File aJarFile) {
@@ -192,7 +255,7 @@ public final class LicenseReportTask extends Task {
       }
     }
     if (tmpLicense.length() > 0) {
-      LicenseInformation tempLicenseInformation = new LicenseInformation(aJarFile, "META-INF/MANIFEST.MF", tmpLicense.toString());
+      LicenseInformation tempLicenseInformation = new LicenseInformation("META-INF/MANIFEST.MF", tmpLicense.toString());
       tempLicenseInformations.add(tempLicenseInformation);
     }
 
@@ -235,16 +298,20 @@ public final class LicenseReportTask extends Task {
     if (!isBlank(tmpLicenseHead)) {
       // Create only the relative path.
       String tempShortTextFileName = tempTextFileName.substring(aJarFile.getAbsolutePath().length() - aJarFile.getName().length());
-      tempLicenseInformations.add(new LicenseInformation(aJarFile, tempShortTextFileName, tmpLicenseHead));
+      tempLicenseInformations.add(new LicenseInformation(tempShortTextFileName, tmpLicenseHead));
     }
 
     if (tempLicenseInformations.size() == 0) {
       System.out.printf("%50s\t%s\r\n", aJarFile.getName(), NO_LICENSE_INFORMATION_FOUND);
-      tempLicenseInformations.add(new LicenseInformation(aJarFile, null, null));
-      addResultToReport(tempLicenseInformations);
+      tempLicenseInformations.add(new LicenseInformation(null, null));
+      addResultToReport(aJarFile, tempLicenseInformations);
     } else {
-      System.out.printf("%50s\t%s\r\n", aJarFile.getName(), tempLicenseInformations.get(0).toString());
-      addResultToReport(tempLicenseInformations);
+      StringBuffer tempString = new StringBuffer();
+      for (LicenseInformation tempLicenseInformation1 : tempLicenseInformations) {
+        tempString.append(tempLicenseInformation1.toString() + ", ");
+      }
+      System.out.printf("%50s\t%s\r\n", aJarFile.getName(), tempString.toString());
+      addResultToReport(aJarFile, tempLicenseInformations);
     }
 
   }
@@ -257,7 +324,7 @@ public final class LicenseReportTask extends Task {
   public LicenseInformation findFileInFileAndWriteTo(File tmpFile, String aLicenseFilename) {
     String tmpLicenseHead = findFileAndExtractHeaderFromJar(tmpFile, aLicenseFilename);
     if (!isBlank(tmpLicenseHead)) {
-      return new LicenseInformation(tmpFile, aLicenseFilename, tmpLicenseHead);
+      return new LicenseInformation(aLicenseFilename, tmpLicenseHead);
     } else {
       return null;
     }
@@ -305,34 +372,8 @@ public final class LicenseReportTask extends Task {
     return null;
   }
 
-  private void addResultToReport(ArrayList<LicenseInformation> aLicenseInformations) {
-    for (LicenseInformation tempLicenseInformation : aLicenseInformations) {
-      String tmpFileName = tempLicenseInformation.getFile().getName();
-      String tmpSource = tempLicenseInformation.getSource();
-      String tmpLicenseInformation = tempLicenseInformation.getLicenseInformation();
-
-      Node tmpChild = document.createElement("library");
-
-      Element tmpNameElement = document.createElement("name");
-      tmpNameElement.setTextContent(tmpFileName);
-      tmpChild.appendChild(tmpNameElement);
-
-      Element tmpSourceElement = document.createElement("source");
-      if (tmpSource != null) {
-        tmpSourceElement.setTextContent(tmpSource);
-      }
-      tmpChild.appendChild(tmpSourceElement);
-
-      Element tmpLicenseElement = document.createElement("license");
-      if (tmpLicenseInformation != null) {
-
-        CDATASection tmpCDATASection = document.createCDATASection(tmpLicenseInformation);
-        tmpLicenseElement.appendChild(tmpCDATASection);
-      }
-      tmpChild.appendChild(tmpLicenseElement);
-
-      librariesElement.appendChild(tmpChild);
-    }
+  private void addResultToReport(File aFile, ArrayList<LicenseInformation> aLicenseInformations) {
+    licenseInformations.put(aFile, aLicenseInformations);
   }
 
   /**
@@ -432,6 +473,25 @@ public final class LicenseReportTask extends Task {
 
   public void setToDir(File aToDir) {
     toDir = aToDir;
+  }
+
+  /**
+   * Simple getter for {@link #licenseInformations}.
+   * 
+   * @return the {@link #licenseInformations}
+   */
+  public HashMap<File, ArrayList<LicenseInformation>> getLicenseInformations() {
+    return licenseInformations;
+  }
+
+  /**
+   * Simple setter for {@link #licenseInformations}.
+   * 
+   * @param aLicenseInformations
+   *          - new value of {@link #licenseInformations}.
+   */
+  public void setLicenseInformations(HashMap<File, ArrayList<LicenseInformation>> aLicenseInformations) {
+    licenseInformations = aLicenseInformations;
   }
 
 }
