@@ -7,6 +7,8 @@ As there was no solution for this problem, the project idea started on the
 following question on [StackOverflow](http://stackoverflow.com):
 [How can I compile a report showing all used licenses with Ant?](http://stackoverflow.com/questions/15024819/how-can-i-compile-a-report-showing-all-used-licenses-with-ant)
 
+[![Build Status](https://travis-ci.org/guerda/license-report.svg?branch=master)](https://travis-ci.org/guerda/license-report)
+
 Features
 --------
 * Scanning all defined JAR files for license information
